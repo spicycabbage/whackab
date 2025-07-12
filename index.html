@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Whack-A-B </title>
+    <title>Whack-a-Mole Twist</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -33,8 +33,22 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 60px;
             cursor: pointer;
+            transform: translateY(100%);
+        }
+        .rise {
+            animation: rise 0.5s ease-out forwards;
+        }
+        .sink {
+            animation: sink 0.3s ease-in forwards;
+        }
+        @keyframes rise {
+            from { transform: translateY(100%); }
+            to { transform: translateY(0); }
+        }
+        @keyframes sink {
+            from { transform: translateY(0); }
+            to { transform: translateY(100%); }
         }
         #leaderboard {
             margin-top: 20px;
@@ -44,15 +58,18 @@
             padding: 0;
         }
     </style>
-    <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.10.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore-compat.js"></script>
 </head>
 <body>
-    <h1>Whack-A-B</h1>
-    <p>Whack the Pam Bondi images for points, but ignore the USA flags !</p>
+    <h1>Whack-A-B Twist</h1>
+    <p>Whack the Pam Bondi images to knock some senses into her, but don't touch the Epstein List!</p>
     <div id="score">Score: 0</div>
     <button id="start">Start Game</button>
     <div class="grid">
+        <div class="hole"></div>
+        <div class="hole"></div>
+        <div class="hole"></div>
         <div class="hole"></div>
         <div class="hole"></div>
         <div class="hole"></div>
@@ -68,7 +85,7 @@
             apiKey: "AIzaSyDIGXrQfni87eXgNDLVvDPRiUlSKP6a7Q8",
             authDomain: "whack-a-b.firebaseapp.com",
             projectId: "whack-a-b",
-            storageBucket: "whack-a-b.firebasestorage.app",
+            storageBucket: "whack-a-b.appspot.com",
             messagingSenderId: "290027658671",
             appId: "1:290027658671:web:38b6d38ce5bc4e6785e35a"
         };
@@ -83,9 +100,10 @@
         let score = 0;
         let gameOver = false;
         let currentUp = 0;
-        let maxConcurrent = 1;
-        let currentDuration = 1500; // faster initial reaction time in ms
-        let popIntervalTime = 1200; // faster initial pop interval in ms
+        let maxConcurrent = 2; // Start with 2 for less easy
+        let currentDuration = 2500; // Ample time
+        let popIntervalTime = 1500; // Interval for waves
+        let moleProbability = 0.5;
         let popTimer;
         let difficultyTimer;
 
@@ -98,72 +116,100 @@
             score = 0;
             gameOver = false;
             currentUp = 0;
-            maxConcurrent = 1;
-            currentDuration = 1500;
-            popIntervalTime = 1200;
+            maxConcurrent = 2;
+            currentDuration = 2500;
+            popIntervalTime = 1500;
+            moleProbability = 0.5;
             updateScore();
             clearAllPops();
-            popTimer = setInterval(popUp, popIntervalTime);
-            difficultyTimer = setInterval(increaseDifficulty, 2000);
+            popTimer = setInterval(popWave, popIntervalTime);
+            difficultyTimer = setInterval(increaseDifficulty, 3000);
             startButton.disabled = true;
         }
 
-        function popUp() {
+        function popWave() {
             if (gameOver) return;
+            let toPop = maxConcurrent - currentUp;
             const emptyHoles = [...holes].filter(h => !h.firstChild);
-            if (emptyHoles.length === 0 || currentUp >= maxConcurrent) return;
+            toPop = Math.min(toPop, emptyHoles.length);
+            for (let i = 0; i < toPop; i++) {
+                popSingle();
+            }
+        }
+
+        function popSingle() {
+            const emptyHoles = [...holes].filter(h => !h.firstChild);
+            if (emptyHoles.length === 0) return;
 
             const hole = emptyHoles[Math.floor(Math.random() * emptyHoles.length)];
-            const isMole = Math.random() < 0.5;
+            const isMole = Math.random() < moleProbability;
             const pop = document.createElement('div');
             pop.classList.add('pop');
-            pop.innerHTML = isMole ? '<img src="https://upload.wikimedia.org/wikipedia/commons/9/9a/Bondi_bio_photo.jpg" alt="Pam Bondi" style="width:80px;height:auto;">' : '<img src="https://upload.wikimedia.org/wikipedia/en/a/a4/Flag_of_the_United_States.svg" alt="American Flag" style="width:80px;height:auto;">';
-            pop.dataset.type = isMole ? 'bondi' : 'flag';
+            pop.innerHTML = isMole ? '<img src="https://upload.wikimedia.org/wikipedia/commons/9/9a/Bondi_bio_photo.jpg" alt="Pam Bondi" style="width:80px;height:auto;border-radius:50%;">' : '<div style="color:white; font-size:16px; text-align:center; font-weight:bold;">Epstein<br>List</div>';
+            pop.dataset.type = isMole ? 'bondi' : 'epstein-list';
             hole.appendChild(pop);
             currentUp++;
+            pop.classList.add('rise');
+
+            let whacked = false;
 
             pop.addEventListener('click', () => {
-                if (gameOver) return;
-                if (isMole) {
-                    score++;
-                    updateScore();
-                } else {
-                    if (!gameOver) endGame('You hit a flag!');
-                }
-                hole.removeChild(pop);
-                currentUp--;
+                if (gameOver || whacked || pop.classList.contains('sink')) return;
+                whacked = true;
+                pop.classList.remove('rise');
+                pop.classList.add('sink');
+                setTimeout(() => {
+                    if (pop.dataset.type === 'bondi') {
+                        score++;
+                        updateScore();
+                    } else {
+                        if (!gameOver) endGame('You hit the Epstein List!');
+                    }
+                    if (hole.firstChild === pop) {
+                        hole.removeChild(pop);
+                        currentUp--;
+                    }
+                }, 300);
             });
 
             setTimeout(() => {
-                if (hole.firstChild === pop) {
-                    if (isMole) {
-                        if (!gameOver) endGame('You missed Pam Bondi!');
-                    } else {
-                        if (!gameOver) {
-                            score++;
-                            updateScore();
+                if (!whacked) {
+                    pop.classList.add('sink');
+                    setTimeout(() => {
+                        if (pop.dataset.type === 'bondi') {
+                            if (!gameOver) endGame('You missed Pam Bondi!');
+                        } else {
+                            if (!gameOver) {
+                                score++;
+                                updateScore();
+                            }
                         }
-                    }
-                    hole.removeChild(pop);
-                    currentUp--;
+                        if (hole.firstChild === pop) {
+                            hole.removeChild(pop);
+                            currentUp--;
+                        }
+                    }, 300);
                 }
-            }, currentDuration);
+            }, currentDuration + 500); // Start auto sink after duration + rise time
         }
 
         function updateScore() {
             scoreDisplay.innerText = `Score: ${score}`;
-            if (score >= 5) maxConcurrent = 2;
-            if (score >= 10) maxConcurrent = 3;
-            if (score >= 15) maxConcurrent = 4;
-            if (score >= 25) maxConcurrent = 5;
-            if (score >= 35) maxConcurrent = 6;
+            if (score >= 5) maxConcurrent = 3;
+            if (score >= 10) maxConcurrent = 4;
+            if (score >= 15) maxConcurrent = 5;
+            if (score >= 20) maxConcurrent = 6;
+            if (score >= 25) maxConcurrent = 7;
+            if (score >= 30) maxConcurrent = 8;
+            if (score >= 35) maxConcurrent = 9;
         }
 
         function increaseDifficulty() {
-            currentDuration = Math.max(500, currentDuration - 100);
-            popIntervalTime = Math.max(300, popIntervalTime - 100);
+            currentDuration = Math.max(1200, currentDuration - 100);
+            popIntervalTime = Math.max(800, popIntervalTime - 50);
+            moleProbability = Math.min(0.7, moleProbability + 0.01); // Increase moles slightly for difficulty
             clearInterval(popTimer);
-            popTimer = setInterval(popUp, popIntervalTime);
+            popTimer = setInterval(popWave, popIntervalTime);
         }
 
         async function endGame(message) {
@@ -180,34 +226,27 @@
                     await db.collection('scores').add({
                         name,
                         score: finalScore,
-                        timestamp: firebase.firestore.Timestamp.now()
+                        timestamp: firebase.firestore.FieldValue.serverTimestamp()
                     });
-                    await loadLeaderboard(finalScore);
-                } else {
-                    await loadLeaderboard();
+                    loadLeaderboard();
                 }
             } catch (error) {
-                console.error('Firebase error:', error);
-                leaderboardDisplay.innerHTML = '<p>Error loading leaderboard: ' + error.message + '</p>';
+                console.error('Error saving score:', error);
             }
         }
 
-        async function loadLeaderboard(currentScore = null) {
+        async function loadLeaderboard() {
             try {
-                const topSnap = await db.collection('scores').orderBy('score', 'desc').limit(10).get();
-                const top10 = topSnap.docs.map(doc => doc.data());
-                let html = '<h2>Leaderboard (Top 10)</h2><ul>' + 
-                    top10.map(l => `<li>${l.name}: ${l.score}</li>`).join('') + 
-                    '</ul>';
-                if (currentScore !== null && currentScore > 0) {
-                    const countSnap = await db.collection('scores').where('score', '>', currentScore).get();
-                    const rank = countSnap.size + 1;
-                    html += `<p>Your rank: ${rank}</p>`;
-                }
+                const snapshot = await db.collection('scores').orderBy('score', 'desc').limit(10).get();
+                let html = '<h2>Leaderboard</h2><ul>';
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    html += `<li>${data.name}: ${data.score}</li>`;
+                });
+                html += '</ul>';
                 leaderboardDisplay.innerHTML = html;
             } catch (error) {
-                console.error('Firebase load error:', error);
-                leaderboardDisplay.innerHTML = '<p>Error loading leaderboard: ' + error.message + '</p>';
+                console.error('Error loading leaderboard:', error);
             }
         }
 
