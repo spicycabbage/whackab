@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Whack-a-Mole Twist</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(3, 100px);
+            grid-gap: 20px;
+            margin: 20px auto;
+            justify-content: center;
+        }
+        .hole {
+            width: 100px;
+            height: 100px;
+            background-color: #333;
+            border-radius: 50%;
+            position: relative;
+            overflow: hidden;
+        }
+        .pop {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 60px;
+            cursor: pointer;
+        }
+        #leaderboard {
+            margin-top: 20px;
+        }
+        #leaderboard ul {
+            list-style: none;
+            padding: 0;
+        }
+    </style>
+    <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+</head>
+<body>
+    <h1>Whack-a-Mole Twist</h1>
+    <p>Whack the moles (🐭) for points, but ignore the flowers (🌼)!</p>
+    <div id="score">Score: 0</div>
+    <button id="start">Start Game</button>
+    <div class="grid">
+        <div class="hole"></div>
+        <div class="hole"></div>
+        <div class="hole"></div>
+        <div class="hole"></div>
+        <div class="hole"></div>
+        <div class="hole"></div>
+    </div>
+    <div id="leaderboard"></div>
+
+    <script>
+        // Firebase configuration updated with provided details
+        const firebaseConfig = {
+            apiKey: "AIzaSyDIGXrQfni87eXgNDLVvDPRiUlSKP6a7Q8",
+            authDomain: "whack-a-b.firebaseapp.com",
+            projectId: "whack-a-b",
+            storageBucket: "whack-a-b.firebasestorage.app",
+            messagingSenderId: "290027658671",
+            appId: "1:290027658671:web:38b6d38ce5bc4e6785e35a"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        const holes = document.querySelectorAll('.hole');
+        const scoreDisplay = document.getElementById('score');
+        const leaderboardDisplay = document.getElementById('leaderboard');
+        const startButton = document.getElementById('start');
+
+        let score = 0;
+        let gameOver = false;
+        let currentUp = 0;
+        let maxConcurrent = 1;
+        let currentDuration = 1500; // faster initial reaction time in ms
+        let popIntervalTime = 1200; // faster initial pop interval in ms
+        let popTimer;
+        let difficultyTimer;
+
+        // Load leaderboard on page load for visibility
+        loadLeaderboard();
+
+        startButton.addEventListener('click', startGame);
+
+        function startGame() {
+            score = 0;
+            gameOver = false;
+            currentUp = 0;
+            maxConcurrent = 1;
+            currentDuration = 1500;
+            popIntervalTime = 1200;
+            updateScore();
+            clearAllPops();
+            popTimer = setInterval(popUp, popIntervalTime);
+            difficultyTimer = setInterval(increaseDifficulty, 2000);
+            startButton.disabled = true;
+        }
+
+        function popUp() {
+            if (gameOver) return;
+            const emptyHoles = [...holes].filter(h => !h.firstChild);
+            if (emptyHoles.length === 0 || currentUp >= maxConcurrent) return;
+
+            const hole = emptyHoles[Math.floor(Math.random() * emptyHoles.length)];
+            const isMole = Math.random() < 0.5;
+            const pop = document.createElement('div');
+            pop.classList.add('pop');
+            pop.innerHTML = isMole ? '🐭' : '🌼';
+            pop.dataset.type = isMole ? 'mole' : 'flower';
+            hole.appendChild(pop);
+            currentUp++;
+
+            pop.addEventListener('click', () => {
+                if (gameOver) return;
+                if (isMole) {
+                    score++;
+                    updateScore();
+                } else {
+                    if (!gameOver) endGame('You hit a flower!');
+                }
+                hole.removeChild(pop);
+                currentUp--;
+            });
+
+            setTimeout(() => {
+                if (hole.firstChild === pop) {
+                    if (isMole) {
+                        if (!gameOver) endGame('You missed a mole!');
+                    } else {
+                        if (!gameOver) {
+                            score++;
+                            updateScore();
+                        }
+                    }
+                    hole.removeChild(pop);
+                    currentUp--;
+                }
+            }, currentDuration);
+        }
+
+        function updateScore() {
+            scoreDisplay.innerText = `Score: ${score}`;
+            if (score >= 5) maxConcurrent = 2;
+            if (score >= 10) maxConcurrent = 3;
+            if (score >= 15) maxConcurrent = 4;
+            if (score >= 25) maxConcurrent = 5;
+            if (score >= 35) maxConcurrent = 6;
+        }
+
+        function increaseDifficulty() {
+            currentDuration = Math.max(500, currentDuration - 100);
+            popIntervalTime = Math.max(300, popIntervalTime - 100);
+            clearInterval(popTimer);
+            popTimer = setInterval(popUp, popIntervalTime);
+        }
+
+        async function endGame(message) {
+            if (gameOver) return; // Prevent multiple calls
+            gameOver = true;
+            clearInterval(popTimer);
+            clearInterval(difficultyTimer);
+            alert(`${message} Final Score: ${score}`);
+            startButton.disabled = false; // Enable restart immediately after alert
+            try {
+                let finalScore = score; // Capture score for leaderboard
+                if (finalScore > 0) {
+                    const name = prompt('Enter your name for the leaderboard:') || 'Anonymous';
+                    await db.collection('scores').add({
+                        name,
+                        score: finalScore,
+                        timestamp: firebase.firestore.Timestamp.now()
+                    });
+                    await loadLeaderboard(finalScore);
+                } else {
+                    await loadLeaderboard();
+                }
+            } catch (error) {
+                console.error('Firebase error:', error);
+                leaderboardDisplay.innerHTML = '<p>Error loading leaderboard: ' + error.message + '</p>';
+            }
+        }
+
+        async function loadLeaderboard(currentScore = null) {
+            try {
+                const topSnap = await db.collection('scores').orderBy('score', 'desc').limit(10).get();
+                const top10 = topSnap.docs.map(doc => doc.data());
+                let html = '<h2>Leaderboard (Top 10)</h2><ul>' + 
+                    top10.map(l => `<li>${l.name}: ${l.score}</li>`).join('') + 
+                    '</ul>';
+                if (currentScore !== null && currentScore > 0) {
+                    const countSnap = await db.collection('scores').where('score', '>', currentScore).get();
+                    const rank = countSnap.size + 1;
+                    html += `<p>Your rank: ${rank}</p>`;
+                }
+                leaderboardDisplay.innerHTML = html;
+            } catch (error) {
+                console.error('Firebase load error:', error);
+                leaderboardDisplay.innerHTML = '<p>Error loading leaderboard: ' + error.message + '</p>';
+            }
+        }
+
+        function clearAllPops() {
+            holes.forEach(hole => {
+                while (hole.firstChild) {
+                    hole.removeChild(hole.firstChild);
+                }
+            });
+            currentUp = 0;
+        }
+    </script>
+</body>
+</html>
