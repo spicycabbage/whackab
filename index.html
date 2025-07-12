@@ -49,7 +49,7 @@
 </head>
 <body>
     <h1>Whack-a-Mole Twist</h1>
-    <p>Whack the moles (🐭) for points, but ignore the flowers (🌼)!</p>
+    <p>Whack the Pam Bondi images for points, but ignore the flags (🇺🇸)!</p>
     <div id="score">Score: 0</div>
     <button id="start">Start Game</button>
     <div class="grid">
@@ -117,8 +117,8 @@
             const isMole = Math.random() < 0.5;
             const pop = document.createElement('div');
             pop.classList.add('pop');
-            pop.innerHTML = isMole ? '🐭' : '🌼';
-            pop.dataset.type = isMole ? 'mole' : 'flower';
+            pop.innerHTML = isMole ? '<img src="https://upload.wikimedia.org/wikipedia/commons/9/9a/Bondi_bio_photo.jpg" alt="Pam Bondi" style="width:80px;height:auto;">' : '<img src="https://upload.wikimedia.org/wikipedia/en/a/a4/Flag_of_the_United_States.svg" alt="American Flag" style="width:80px;height:auto;">';
+            pop.dataset.type = isMole ? 'bondi' : 'flag';
             hole.appendChild(pop);
             currentUp++;
 
@@ -128,7 +128,7 @@
                     score++;
                     updateScore();
                 } else {
-                    if (!gameOver) endGame('You hit a flower!');
+                    if (!gameOver) endGame('You hit a flag!');
                 }
                 hole.removeChild(pop);
                 currentUp--;
@@ -137,7 +137,7 @@
             setTimeout(() => {
                 if (hole.firstChild === pop) {
                     if (isMole) {
-                        if (!gameOver) endGame('You missed a mole!');
+                        if (!gameOver) endGame('You missed Pam Bondi!');
                     } else {
                         if (!gameOver) {
                             score++;
